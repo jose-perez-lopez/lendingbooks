@@ -1,0 +1,914 @@
+/*
+ * Copyright (c) 2012 Intelygenz <www.intelygenz.com>
+ * All rights reserved.
+ * 
+ * BSD License
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of copyright holders nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL COPYRIGHT HOLDERS OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * Description:
+ * 
+ * This JavaScript library provides different client-side optimization techniques for front construction.
+ * It is independent and compatible with any server-side technology: JAVA, PHP, Python, GOOGLE APP ENGINE, .NET...
+ * 
+ * Dependences:
+ * 	jQuery 1.5.1 +
+ *	
+ * Download:
+ * 
+ *  Previous version can be found at: https://iris-js.googlecode.com/svn/tags/
+ *  e.g.:
+ *  	https://iris-js.googlecode.com/svn/tags/0.3.2/iris.js
+ * 
+ * Creation date: 2012-01-12
+ * 
+ * [version] date -> authors
+ * 		upd|fix|new|dep|rmv - description
+ *
+ * [0.3.5] 2012-04-23 -> jonas.dacruz@intelygenz.com, angel.sanchez@intelygenz.com, fco.gamiz@intelygenz.com
+ * 		[new] Added template parameters formatting: date and currency
+ *		[upd] iris.Include() can load external resources
+ * 
+ * [0.3.4] 2012-04-11 -> jonas.dacruz@intelygenz.com, angel.sanchez@intelygenz.com
+ * 		[new] self.Template() added p_params parameter
+ * 		[new] Added ##Id## notation to write parameters values into templates
+ * 		[upd] self.InstanceUI() change p_uiId to p_idOrJq, now you can do self.InstanceUI($obj, ...) or self.InstanceUI("id", ...)
+ * 		[new] Added new template modes: self.TEMPLATE_AFTER and self.TEMPLATE_BEFORE
+ * 		[rmv] self.Template() removed p_cssUrl parameter
+ * 		[new] Created iris.net.Ajax() function
+ *
+ * [0.3.3] 2012-04-02 -> fco.gamiz@intelygenz.com, javier.lazaro@intelygenz.com, angel.sanchez@intelygenz.com
+ *		[new] Config setting: "environments-nocache"
+ * 		[new] iris.Include : Load *.css and *.js files synchronously
+ * 		[fix] template.$Get() templates need a dom root node
+ * 		[upd] When screen awakes with null paramater, automatically receive {}
+ * 		[fix] Bug in the _AbstractComponent.__UIComponents__ array
+ *  	[upd] Added p_$tmpl paramater to self.$Get() and self.InstanceUI(). If p_$tmpl is undefined, p_$tmpl = this.__$Tmpl__
+ *		[new] UI.TEMPLATE_APPEND, UI.TEMPLATE_REPLACE, UI.$Container(), UI.TemplateMode() and Screen.$Container()
+ *		[rmv] UI.Replace and UI.Append. Now Screen.Template() does append, and UI.Template() does replace by default (use UI.TemplateMode() to change it)
+ *
+ * [0.3.2] 2012-03-14 -> jonas.dacruz@intelygenz.com, angel.sanchez@intelygenz.com
+ * 		[upd] functions inherited into iris.UI always receive "self" parameter and must be used by all members instead of "this"
+ * 		[new] (iris.UI) self.$Container() provide access to the jQuery component container
+ * 
+ * [0.3.1] 2012-03-13 -> jonas.dacruz@intelygenz.com, angel.sanchez@intelygenz.com
+ * 		[new] Screens and UI components inheritance
+ * 		[new] AbstractComponent.InstanceUI()
+ * 		[new] Automated dependency load
+ * 		[new] Adoption Resource-View-Presenter pattern
+ * 		[upd] Complete code refactor
+ * 		[rmv] iris.screen.transition
+ * 		
+ * 		WARNING: No backward with previous versions
+ * 
+ * */
+
+var iris = new function() {
+	
+	var _APP_VERSION = "0.3.5"
+	,	_APP_NAME = "iris"
+	,	_JQ_MIN_VER = 1.5
+	;
+
+	var _Env = null
+	,	_Log = {"error":true}
+	,	_LogPrefix = ""
+	,	_Screen = {}
+	,	_ScreenUrl = {}
+	,	_Context = {}
+	,	_LastScreen = {}
+	,	_History = []
+	,	_HistoryCurrent = 0
+	,	_Global = {}
+	,	_Local = {}
+	,	_Locale = {}
+	,	_Data = {}
+	,	_Event = {}
+	,	_Includes = {}
+	,	_Components = {}
+	,	_AppBaseUri = ""
+	,	_LastIncludePath
+	,	_Head = $("head").get(0)
+	,	_Cache = true
+	;
+
+	var _NavigateSettings = {
+		  "params"	 		: null
+		, "saveInHistory" 	: true
+		, "replaceInHistory": false
+	};
+	
+	if( typeof jQuery === "undefined" ) {
+		_E( "jQuery " + _JQ_MIN_VER + "+ previous load required" );
+	}
+	else if ( $().jquery < _JQ_MIN_VER ) {
+		_E( "jQuery " + $().jquery + " currently loaded, jQuery " + _JQ_MIN_VER + "+ required" );
+	}
+	
+	var _HasConsole = (window.console && window.console.debug && window.console.warn && window.console.error);
+	if ( !_HasConsole && window.console && window.console.log ) {
+		window.console.log("advanced console debugging is not supported in this browser");
+	}
+	
+	function _AppName () {
+		return _APP_NAME + " v" + _APP_VERSION + " [" + _Env + "]";
+	}
+
+	function _Include(p_uiFile) {
+		
+		if ( !_Includes.hasOwnProperty(p_uiFile) ) {
+			_Includes[p_uiFile] = true;
+			var fileUrl = _FileUri(p_uiFile);
+			_D("[iris.ui.Include]", fileUrl);
+			
+			if ( p_uiFile.lastIndexOf(".css") > -1 ) {
+				var link  = document.createElement('link');
+				link.rel = 'stylesheet';
+				link.type = 'text/css';
+				link.href = fileUrl;
+				_Head.appendChild(link);
+			}
+			else {
+				_LastIncludePath = p_uiFile;
+				var isHtml = p_uiFile.lastIndexOf(".html") > -1;
+				_AjaxSync(
+					  fileUrl
+					, isHtml ? "html" : "text"
+					, function (p_data) {
+						if ( isHtml ) {
+							_IncludeHtml(p_data, p_uiFile);
+						}
+						else {
+							_IncludeJs(p_data);
+						}
+					}
+					, function (p_err) {
+						delete _Includes[fileUrl];
+						_E(p_err.status, "Error loading file", fileUrl);
+					}
+				);
+			}
+		}
+	}
+	
+	function _IncludeHtml ( p_html, p_uiFile ) {
+		_Includes[p_uiFile] = _LocaleParse(p_html);
+	}
+	
+	function _IncludeJs ( p_js ) {
+		var script = document.createElement("script");
+		script.language = "javascript";
+		script.type = "text/javascript";
+		script.text = p_js;
+		_Head.appendChild(script);
+	}
+	
+	function _IncludeFiles () {
+		for ( var f=0,F=arguments.length; f<F; f++ ){
+			_Include( arguments[f] );
+		}
+	};
+	
+	function _LogOf (p_type) {
+		return _Log[p_type];
+	}
+	
+	function _L(){
+		if ( _HasConsole && window.console.log) {
+			window.console.log(_LogPrefix, arguments);
+		}
+	};
+	
+	function _D(){
+		if(_HasConsole && _LogOf("debug") ){
+			window.console.debug(_LogPrefix, arguments);
+		}
+	};
+	
+	function _W(){
+		if(_HasConsole && _LogOf("warning") ){
+			window.console.warn(_LogPrefix, arguments);
+		}
+	};
+	
+	function _E(){
+		if(_HasConsole && _LogOf("error") ){
+			window.console.error(_LogPrefix, arguments);
+		}
+	};
+	
+	function _ConfigLoad (p_json){
+		if ( p_json ) {
+			_Data = p_json;
+
+			_GlobalLoad( _Data["global"] );
+
+			var currentEnv = _GetEnv();
+			if ( _Data["log"] ) {
+				var logConfig = _Data["log"][currentEnv];
+				var logs = logConfig.split(",");
+				for ( var logType in logs ) {
+					_Log[ $.trim(logs[logType]) ] = true;
+				}
+			}
+			
+			_Cache = true;
+			if ( _Data.hasOwnProperty("environments-nocache") ) {
+				var envNocache = _Data["environments-nocache"].split(",");
+				for ( var f=0, F=envNocache.length; f<F; f++ ) {
+					if ( envNocache[f] == currentEnv ) {
+						_Cache = false;
+						break;
+					}
+				}
+			}
+			
+			_LocalLoad( _Data["local"] );
+		}
+		return _Data;
+	};
+	
+	function _GetEnv (p_env) {
+		if ( p_env !== undefined ) {
+			_Env = p_env;
+		}
+		else {
+			if ( !_Env ) {
+				_Env = _Data["environment-default"];
+				for (var p in _Data["environment"] ){
+					if ( document.location.href.indexOf( p ) > -1 ) {
+						_Env = _Data["environment"][p];
+						break;
+					}
+				}
+				if ( !_Env ) {
+					_Env = "pro";
+				}
+				_LogPrefix = "[" + _Env + "]";
+			}
+			return _Env;
+		}
+	};
+	
+	function _AjaxSync (p_uri, p_dataType, f_success, f_error) {
+		$.ajax(
+			{ url: p_uri
+			, dataType: p_dataType
+			, async: false
+			, cache: _Cache
+			, success : f_success
+			, error : f_error
+			}
+		);
+	}
+	
+	function _GlobalLoad(p_hash){
+		$.extend(_Global, p_hash);
+		return _Global;
+	};
+
+	function _GlobalData (p_label, p_value){
+		if ( p_label && p_value !== undefined ) {
+			_Global[p_label] = p_value; 	
+		}
+		else if ( p_label ) {
+			return _Global[p_label];
+		}
+		else {
+			return _Global;
+		}
+	};
+	
+	function _LocalLoad(p_hash){
+		$.extend(_Local, p_hash);
+		return _Local;
+	};
+
+	function _LocalData(p_label, p_value){
+		if ( p_label && p_value !== undefined ) {
+			_Local[p_label][_GetEnv()] = p_value; 	
+		}
+		else if ( p_label ) {
+			return _Local[p_label][_GetEnv()];
+		}
+		else  {
+			return _Local;
+		}
+	};
+	
+	function _Find(p_eventName, f_func){
+		var events = _Event[p_eventName];
+		if ( events ) {
+			for ( var f=0, F=events.length; f<F; f++ ) {
+				if ( events[f] === f_func ) {
+					return f;
+				}
+			}
+		}
+		return -1;
+	}
+	
+	function _EventSubscribe(p_eventName, f_func){
+		if ( !_Event[p_eventName] ) {
+			_Event[p_eventName] = [];
+		}
+
+		var index = _Find( p_eventName, f_func );
+		if ( index==-1 ) {
+			index = _Event[p_eventName].length;
+		}
+
+		_Event[p_eventName][index] = f_func;
+	};
+	
+	function _EventRemove(p_eventName, f_func){
+		var index = _Find(p_eventName, f_func);
+		if ( index!=-1 ){
+			_Event[p_eventName].splice(index,1);
+		}
+	};
+
+	function _EventNotify(p_eventName, p_data){
+		if ( _Event[p_eventName] ) {
+			var funcs = _Event[p_eventName];
+			for ( var f=0, F=funcs.length; f<F; f++ ) {
+				funcs[f](p_data);
+			}
+		}
+	}
+	
+	function _BaseUri(p_baseUri){
+		if ( p_baseUri !== undefined ) {
+			_AppBaseUri = p_baseUri;
+		}
+		else {
+			var base = document.getElementsByTagName("base");
+			base = base.length > 0 ? base[0].attributes["href"].value : "/";
+			_AppBaseUri = document.location.protocol + "//" + document.location.host + base;
+		}
+		return _AppBaseUri;
+	};
+
+	function _FileUri(p_fileUri) {
+		return p_fileUri.indexOf("http") === 0 ? p_fileUri: _AppBaseUri + p_fileUri;
+	}
+
+	function _Ajax (p_settings) {
+		return $.ajax(p_settings);
+	}
+
+	function _LocaleLoad(p_locale, p_data){
+		_D("[iris.lang.Load]", p_locale, p_data);
+		_Locale = p_locale;
+		_Data[_Locale] = p_data;
+	};
+
+	function _LocaleGet(p_label, p_locale){
+		var locale = ( p_locale ) ? p_locale : _Locale;
+		var value  = _Data[locale][p_label];
+		if ( !value ) value = "??" + p_label + "??";
+		return value;
+	};
+
+	function _LocaleParse(p_html){
+		var html = p_html;
+		var matches = html.match(/@@[A-Z_\.]+@@/g);
+		if ( matches ) {
+			var f, F = matches.length;
+			for ( f=0; f<F; f++ ) {
+				html = html.replace(matches[f], _LocaleGet(matches[f].substring(2,matches[f].length-2)));
+			}
+		}
+		return html;
+	};
+
+	function _LangLoadFrom (p_locale, p_uri) {
+		_D("[iris.lang.LoadFrom]", p_locale, p_uri);
+		
+		_AjaxSync(
+			  p_uri
+			, "json"
+			, function (p_data) {
+				  _LocaleLoad(p_locale, p_data);
+				  _D("[iris.lang.LoadFrom] loaded", p_data);
+			  }
+			, function (p_err) {
+				  _E(p_err.status, "Error loading lang file", p_uri);
+			}
+		);
+	};
+
+	function _HashToJq(p_hash, p_$obj, p_filter){
+		var dom = p_$obj.get(0);
+		if ( p_filter ){
+			var filter;
+			for ( var f=0, F=p_filter.length; f<F; f++ ){
+				filter = p_hash[p_filter[f]];
+				if ( filter ) {
+					dom.setAttribute(p_filter[f], filter);
+				}
+			}
+		}
+		else {
+			for ( var label in p_hash){
+				dom.setAttribute(label, p_hash[label]);
+			}
+		}
+		return p_$obj;
+	}
+
+	function _JqToHash(p_$obj) {
+		var hash = {};
+		var attrs = p_$obj.get(0).attributes;
+		var label;
+		for( var f=0, F=attrs.length; f<F; f++ ) {
+			label = attrs[f].name;
+			if ( label.indexOf("_")==0 ){
+				label = label.substr(1);
+			}
+			hash[label] = attrs[f].value;
+		}
+		return hash;
+	}
+
+	function _InstanceUI (p_$container, p_uiId, p_jsUrl, p_uiSettings) {
+		_Include(p_jsUrl);
+		var uiInstance = new _AbstractUI();
+		uiInstance.prototype = new _Components[p_jsUrl](uiInstance);
+
+		uiInstance.__Id__ = p_uiId;
+		uiInstance.__$Container__ = p_$container;
+		uiInstance.__UIComponents__ = [];
+		
+		p_uiSettings = p_uiSettings === undefined ? {} : p_uiSettings;
+		var jqToHash = _JqToHash(p_$container);
+		uiInstance.Create(jqToHash, p_uiSettings);
+		
+		return uiInstance;
+	}
+	
+	function _Add (p_$context, p_screenId, p_jsUrl) {
+		_Include(p_jsUrl);
+		
+		_ScreenUrl[p_screenId] = p_jsUrl;
+		_Context[p_screenId] = p_$context;
+		
+		if ( p_$context.get(0) === document.body ) {
+			p_$context.attr("_id", "document_body");
+		}
+	};
+	
+	function _CreateScreen (p_screenId) {
+		
+		var jsUrl = _ScreenUrl[p_screenId];
+		var screenInstance = new _AbstractScreen();
+		screenInstance.prototype = new _Components[jsUrl](screenInstance);
+
+		screenInstance.__Id__ = p_screenId;
+		screenInstance.__UIComponents__ = [];
+		screenInstance.__$Container__ = _Context[p_screenId];
+		
+		screenInstance.Create();
+		screenInstance.Hide();
+		
+		_Screen[p_screenId] = screenInstance;
+	}
+
+	function _Navigate (p_screenId, p_back, p_removeForwardHistory, p_settings){
+		_D("[iris.screen.Goto]", p_screenId, p_settings);
+
+		var settings = _MergeNavSettings(p_settings);
+
+		if ( !_ScreenUrl.hasOwnProperty(p_screenId) ) {
+			_E( "[iris.screen.Goto] iris.screen.Add() has to be previosly called", p_screenId );
+		}
+		else {
+			if ( settings["replaceInHistory"] ) {
+				settings["saveInHistory"] = true;
+				_HistoryCurrent--;
+			}
+
+			if ( settings["saveInHistory"] ) {
+				_History[_HistoryCurrent] = { "screenId": p_screenId, "params": settings["params"], "transition": settings["transition"] };
+				_HistoryCurrent++;
+				if ( p_removeForwardHistory ) {
+					_History = _History.slice(0, _HistoryCurrent);
+				}
+			}
+
+			if ( !_Screen.hasOwnProperty(p_screenId) ) {
+				_CreateScreen(p_screenId);
+			}
+
+			var currentScreen = _Screen[p_screenId];
+			var contextId = currentScreen.$Get().parent().attr("_id");
+
+			if ( _LastScreen.hasOwnProperty(contextId) ) {
+				var lastScreen = _LastScreen[contextId];
+				lastScreen.__Sleep__();
+				lastScreen.Hide();
+			}
+			currentScreen.__Awake__( settings["params"] ? settings["params"] : {} );
+			currentScreen.Show();
+
+			_LastScreen[contextId] = currentScreen;
+
+			_EventNotify( iris.event.SCREEN_NAVIGATION, { "current" : _HistoryCurrent, "total" : _History.length, "screenId" : p_screenId } );
+		}
+	}
+	
+	function _MergeNavSettings (p_settings) {
+		var settings = $.extend({}, _NavigateSettings);
+		$.extend(settings, p_settings);
+		return settings;
+	}
+	
+	function _Forward () {
+		if ( _HistoryCurrent < _History.length ) {
+			_D("[iris.screen.Forward]", _HistoryCurrent, _History);
+
+			var nextScreen = _History[_HistoryCurrent];
+	
+			var settings = _MergeNavSettings({
+				  "params" : nextScreen["params"]
+				, "transition" : nextScreen["transition"]  
+				, "saveInHistory" : false
+				, "replaceInHistory" : false
+			});
+
+			_HistoryCurrent++;
+			_D("[iris.screen.Forward]", nextScreen["screenId"], true, false, settings, _HistoryCurrent, _History);
+			_Navigate(nextScreen["screenId"], false, false, settings);			
+		}
+		else {
+			_E("[iris.screen.Forward]", "no more elements in history");	
+		}		
+	};
+
+	function _Back() {
+		_D("[iris.screen.Back]", _HistoryCurrent, _History);
+		if ( _HistoryCurrent > 0 ) {
+			_HistoryCurrent--;
+			
+			var prevScreen = _History[_HistoryCurrent-1];
+
+			var settings = _MergeNavSettings({
+				  "params" : prevScreen["params"]
+				, "transition" : _History[_HistoryCurrent]["transition"]  
+				, "saveInHistory" : false
+				, "replaceInHistory" : false
+			});
+			_D("[iris.screen.Back]", prevScreen["screenId"], true, false, settings, _HistoryCurrent, _History);
+			_Navigate(prevScreen["screenId"], true, false, settings);
+		}
+		else {
+			_E("[iris.screen.Back]", "no more elements in history");	
+		}
+	};
+	
+	function _Goto (p_screenId, p_settings) {
+		_Navigate(p_screenId, false, true, p_settings);
+	};
+	
+	function _TemplateParse (p_html, p_data) {
+			
+			var matches, regExp = /##([0-9A-Za-z_\.]+)(\|(date|currency)(\([^\)]+\))*?)?##/g;
+			var formatLabel, formatParam, value;
+	
+			while ( matches = regExp.exec(p_html) ) {
+				formatLabel = matches[3];
+				formatParam = matches[4];
+				if ( formatParam ) {
+					formatParam = formatParam.replace(/[\(\)]/g, "");
+				}
+	
+				value = p_data[matches[1]];
+				switch (formatLabel) {
+					case "date":
+						value = _ParseDate(value, formatParam);
+						break;
+					case "currency":
+						value = _ParseCurrency(value);
+						break;
+				}
+				
+				p_html = p_html.replace(matches[0], value);
+			}
+			
+		return p_html;
+	}
+	
+	function _ParseCurrency (p_value) {
+		var settings = _Regional[_Locale]["currency"];
+		
+		var val = Number(p_value);
+		var format = (val >= 0) ? settings["formatPos"] : settings["formatNeg"];
+		
+		var decimal = val % 1;
+		var num = String( Math.abs(val-decimal) );
+		
+		decimal = String(Math.abs(decimal).toFixed(settings["precision"]))
+		decimal = decimal.substr(2);
+	
+		for (var i = 0; i < Math.floor((num.length - (1 + i)) / 3); i++) {
+			num = num.substring(0, num.length - (4 * i + 3)) + settings["thousand"] + num.substring(num.length - (4 * i + 3));
+		}
+		
+		return format.replace("n", num + settings["decimal"] + decimal );
+	}
+	
+	function _ParseDate (p_date, p_format) {
+		if ( !p_format ) {
+			p_format = _Regional[_Locale]["dateFormat"];
+		}
+		
+		if ( typeof p_date !== "object" ) {
+			p_date = new Date(Number(p_date))
+		}
+		
+		var formatDate = "";
+		for (var f=0, F=p_format.length; f<F; f++) {
+			formatDate += _DateFormatChar(p_format[f], p_date);
+		}
+		return formatDate;
+	}
+	
+	function _LeadingZero (p_number) {
+		return (p_number < 10) ? "0" + p_number : p_number;
+	}
+	
+	function _DateFormatChar (p_formatChar, p_date) {
+		var regional = _Regional[_Locale];
+		switch (p_formatChar) {
+			case "y":
+				return String(p_date.getFullYear()).substring(2);
+			case "Y":
+				return p_date.getFullYear();
+			case "m":
+				var m = p_date.getMonth()+1;
+				return _LeadingZero(m);
+			case "n":
+				return p_date.getMonth()+1;
+			case "M":
+				return regional[monthNames][p_date.getMonth()].substring(0, 3);
+			case "b":
+				return regional[monthNames][p_date.getMonth()].substring(0, 3).toLowerCase();
+			case "F":
+				return regional[monthNames][p_date.getMonth()];
+			case "d":
+				var d = p_date.getDate();
+				return _LeadingZero(d);
+			case "D":
+				return regional[dayNames][p_date.getDay()].substring(0, 3);
+			case "l":
+				return regional[dayNames][p_date.getDay()];
+			case "s":
+				var s = p_date.getSeconds();
+				return _LeadingZero(s);
+			case "i":
+				var i = p_date.getMinutes();
+				return _LeadingZero(i);
+			case "H":
+				var h = p_date.getHours();
+				return _LeadingZero(h);
+			case "h":
+				var h = p_date.getHours();
+				h = (h % 12) == 0 ? 12 : h % 12;
+				return _LeadingZero(h);
+			case "a":
+				return (p_date.getHours() > 12) ? "p.m." : "a.m.";
+			case "A":
+				return (p_date.getHours() > 12) ? "PM" : "AM";
+			case "U":
+				return Math.floor(p_date.getTime() * 0.001);
+			default:
+				return p_formatChar;
+		}
+	}
+	
+	var _Regional = {
+		 "en-US" : {
+			 dayNames : ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+			,monthNames : ["January","February","March","April","May","June","July","August","September","October","November","December"]
+			,dateFormat : "m/d/Y h:i:s"
+			,currency : {
+				 formatPos : "$ n"
+				,formatNeg : "($ n)"
+				,decimal : "."
+				,thousand : ","
+				,precision : 2
+			}
+		}
+		,"es-ES" : {
+			 dayNames : ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"]
+			,monthNames : ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+			,dateFormat : "d/m/Y H:i:s"
+			,currency : {
+				 formatPos : "n €"
+				,formatNeg : "-n €"
+				,decimal : ","
+				,thousand : "."
+				,precision : 2
+			}
+		}
+	};
+	
+	function _AbstractComponent () {
+		this.TEMPLATE_APPEND = "append";
+		this.TEMPLATE_REPLACE = "replace";
+		this.TEMPLATE_AFTER = "after";
+		this.TEMPLATE_BEFORE = "before";
+		
+		this.__$Tmpl__ = null;
+		this.__Id__ = null;
+		this.__UIComponents__ = null;
+		this.__$Container__ = null;
+		
+		this.__Sleep__ = function () {
+			var $ui = this.__UIComponents__;
+			for ( var f=0, F=$ui.length; f < F; f++ ) {
+				$ui[f].Sleep();
+			}
+			this.Sleep();
+		};
+		
+		this.__Awake__ = function (p_params) {
+			var $ui = this.__UIComponents__;
+			for ( var f=0, F=$ui.length; f < F; f++ ) {
+				$ui[f].Awake();
+			}
+			this.Awake(p_params);
+		};
+
+		this.__Template__ = function (p_htmlUrl, p_params, p_mode) {
+			_Include(p_htmlUrl);
+			
+			var tmplHtml = p_params ? _TemplateParse(_Includes[p_htmlUrl], p_params) : _Includes[p_htmlUrl];
+			var $tmpl = $(tmplHtml);
+			
+			this.__$Tmpl__ = $tmpl;
+			if ( $tmpl.size() > 1 ) {
+				iris.E("template must have only one root node", p_htmlUrl, _Includes[p_htmlUrl], $tmpl);
+			}
+			
+			switch ( p_mode ) {
+				case this.TEMPLATE_APPEND:
+					this.__$Container__.append($tmpl);
+					break;
+				case this.TEMPLATE_REPLACE:
+					this.__$Container__.replaceWith($tmpl);
+					break;
+				case this.TEMPLATE_BEFORE:
+					this.__$Container__.before($tmpl);
+					break;
+				case this.TEMPLATE_AFTER:
+					this.__$Container__.after($tmpl);
+					break;
+				default:
+					iris.E("unknown template mode", p_mode);
+			}
+			
+		};
+
+		this.Show = function () {
+			this.__$Tmpl__.show();
+		};
+
+		this.Hide = function () {
+			this.__$Tmpl__.hide();
+		}
+			
+		
+		this.$Get = function (p_id, p_$tmpl) {
+			var $tmpl = p_$tmpl === undefined ? this.__$Tmpl__ : p_$tmpl;
+			
+			if ( p_id ) {
+				var
+				  	id = "[_id=" + p_id + "]"
+				  , filter = $tmpl.filter(id)
+				;
+				return filter.length > 0 ? filter : $tmpl.find(id);
+			}
+			
+			return $tmpl;
+		};
+		
+		this.InstanceUI = function (p_idOrJq, p_jsUrl, p_uiSettings, p_$tmpl) {
+			var $container = typeof p_idOrJq === "string" ? this.$Get(p_idOrJq, p_$tmpl) : p_idOrJq;
+			
+			var uiInstance = _InstanceUI($container, $container.attr("_id"), p_jsUrl, p_uiSettings);
+			this.__UIComponents__.push(uiInstance);
+			return uiInstance;
+		};
+		
+		this.$Container = function () {
+			return this.__$Container__;
+		};
+		
+		// To override functions
+		this.Create = function () {};
+		this.Awake = function () {};
+		this.Sleep = function () {};
+	}
+	
+	(_AbstractUI = function () {
+		this.__TemplateMode__ = this.TEMPLATE_REPLACE;
+		
+		this.TemplateMode = function (p_mode) {
+			this.__TemplateMode__ = p_mode;
+		};
+		this.Template = function (p_htmlUrl, p_params) {
+			this.__Template__(p_htmlUrl, p_params, this.__TemplateMode__);
+		};
+	}).prototype = new _AbstractComponent();
+	
+	(_AbstractScreen = function () {
+		this.Template = function (p_htmlUrl, p_params) {
+			this.__Template__(p_htmlUrl, p_params, this.TEMPLATE_APPEND);
+		};
+	}).prototype = new _AbstractComponent();
+	
+	function _ScreenCreate (f_new) {
+		f_new.prototype = new _AbstractScreen();
+		_Components[_LastIncludePath] = f_new;
+	};
+	
+	function _UICreate (f_new) {
+		_Components[_LastIncludePath] = f_new;
+	};
+	
+	// public interfaces
+	//
+	this.screen = {};
+	this.event = {};
+	this.config = {};
+	this.ui = {};
+	this.net = {};
+	this.global = {};
+	this.local = {};
+	this.lang = {};
+	
+	this.config.Load = _ConfigLoad;
+	this.config.Env = _GetEnv;
+	
+	this.global.Load = _GlobalLoad;
+	this.global.Data = _GlobalData;
+	
+	this.local.Load = _LocalLoad;
+	this.local.Data = _LocalData;
+	
+	this.lang.Load = _LocaleLoad;
+	this.lang.LoadFrom = _LangLoadFrom;
+	this.lang.Get = _LocaleGet;
+	
+	this.L = _L;
+	this.D = _D;
+	this.W = _W;
+	this.E = _E;
+	
+	this.event.Subscribe = _EventSubscribe;
+	this.event.Notify = _EventNotify;
+	this.event.Remove = _EventRemove;
+	
+	this.net.BaseUri = _BaseUri;
+	this.net.Ajax = _Ajax;
+	
+	this.Screen = _ScreenCreate;
+	this.UI =  _UICreate;
+	
+	this.screen.Add = _Add;
+	this.screen.Goto = _Goto;
+	this.screen.Back = _Back;
+	this.screen.Forward = _Forward;
+	
+	this.ui.JqToHash = _JqToHash;
+	this.ui.HashToJq = _HashToJq;
+	
+	this.Include = _IncludeFiles;
+	
+	// Events
+	this.event.SCREEN_NAVIGATION = "iris_event_OnScreenNavigation";
+	
+};

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Lending books</title>
+	<script data-main='js/main' src='./js/libs/require/require.js'></script>
+</head>
+<body>
+Hola
+	<div id='container'>
+		<div id='menu'></div>
+		<div id='content'></div>
+	</div>
+</body>
+</html>
